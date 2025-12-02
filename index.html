@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tic-Tac-Toe</title>
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+  <div class = "title-authors-help-container">
+    <h2 class = "title">Tic-Tac-Toe Game</h2>
+    <div class = "authors-help-container">
+        <p class = "authors">by Rick Butler, Patrick Martus, and Hunter Martin</p>
+        <button class = "how-to-play-button" onclick="openHowToPlayModal()">How To Play</button>
+    </div>
+  </div>
+
+<div id="howToPlayModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" onclick="closeHowToPlayModal()">&times;</span>
+        <h2 class="modal-title">How To Play Tic-Tac-Toe</h2>
+        <p class="modal-text">
+            This online Tic-Tac-Toe game connects players through <strong>Node.js</strong> and
+            <strong>Socket.IO</strong>.
+            Follow the steps below to learn how to play.
+        </p>
+
+        <h3 class="modal-subtitle">1. Getting Started</h3>
+        <ul>
+            <li>Enter a unique screen name and click <strong>Submit</strong>.</li>
+            <li>If the name is taken, you will be asked to choose another one.</li>
+            <li>After logging in, you will see all players and their statuses.</li>
+        </ul>
+
+        <h3 class="modal-subtitle">2. Player Status</h3>
+        <ul>
+            <li><strong>Idle:</strong> Not playing or waiting.</li>
+            <li><strong>Waiting:</strong> Created a game and waiting for an opponent.</li>
+            <li><strong>Playing:</strong> Currently in a match.</li>
+        </ul>
+
+        <h3 class="modal-subtitle">3. Starting or Joining a Game</h3>
+        <ul>
+            <li>Click <strong>NEW GAME</strong> to start and choose X or O.</li>
+            <li>Other players can click <strong>JOIN</strong> to play against you.</li>
+            <li>When both players are ready, the board appears.</li>
+        </ul>
+
+        <h3 class="modal-subtitle">4. Game Rules</h3>
+        <ul>
+            <li>The board is 3 by 3. X always goes first.</li>
+            <li>Players alternate turns, clicking cells to place their symbol.</li>
+            <li>Three symbols in a row (horizontal, vertical, or diagonal) wins.</li>
+            <li>If no moves remain and nobody wins, it is a draw.</li>
+        </ul>
+    </div>
+</div>
+
+
+  <div class = "enter-name-container">
+    <h2 class= "title-enter-name">Enter a screen name:</h2>
+    <input class = "screenname-input" type = "text"></input>
+    <button class = "submit-username-button">Submit</button>
+  </div>
+
+  <div class = "whos-turn-for-current-game-for-user-container">
+    <div class="whos-x-whos-o-container">
+      <div class="whos-x">X: </div>
+      <div class="whos-o">O: </div>
+    </div>
+    <div class = "whos-turn-main-content">
+    <div class="current-turn">Current Turn</div>
+    <div class = "symbol-player-container">
+      <div class = "symbol">Symbol: <span class = "x-or-o"></span></div>
+      <div class="player">Player: <span class = "player-name"></span></div>
+    </div>
+    </div>
+  </div>
+
+<div class="main-content-container">
+
+  <div class="all-matches-container">
+    <div class="matches-content">
+      <h3 class="matches-title">Current Matches</h3>
+      <div class="x-o-header">
+        <span class="x-header">X</span> <span class="o-header">O</span>
+      </div>
+      <hr>
+      <div class="all-matches-table" id="all-matches-body">
+        <div class="match-row">
+          <div class="x-name-container">
+            <button class="x-name-btn">Tiger</button>
+          </div>
+          <div class="o-name-container">
+            <button class="o-name-btn">Join</button>
+          </div>
+        </div>
+        <div class="match-row">
+          <div class="x-name-container">
+            <button class="x-name-btn">Tiger</button>
+          </div>
+          <div class="o-name-container">
+            <button class="o-name-btn">Join</button>
+          </div>
+        </div>
+        <div class="match-row">
+          <div class="x-name-container">
+            <button class="x-name-btn">Hunter Martin</button>
+          </div>
+          <div class="o-name-container">
+            <button class="o-name-btn">Join</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="board-container">
+    <button class="new-game-button">New game</button>
+
+    <div class="new-game-popup-container">
+      <div class="new-game-popup-content">
+        <span class="close-button" onclick="closeNewGameModal()">&times;</span>
+        <h2>New Game</h2>
+        <h4>Do you want to be:</h4>
+        <div class="x-or-o-options">
+          <button class="x-option">X</button>
+          <p>OR</p>
+          <button class="o-option">O</button>
+        </div>
+      </div>
+    </div>
+
+      <div id="main-game-board"></div>
+  </div>
+
+  <div class="idle-clients-container">
+    <div class="idle-clients-content">
+      <h3 class="idle-title">Idle Clients</h3>
+      <div class="idle-list" id="idleClientsBody"></div>
+    </div>
+  </div>
+
+</div>
+
+  <script src="board.js"></script>
+  <script src="index.js"></script>
+</body>
+</html>
