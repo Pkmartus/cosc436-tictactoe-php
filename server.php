@@ -6,12 +6,12 @@
     "messageText":
  } -->
 <?php
+include('dbConnection.php');
 //some of this file is adapted from PROF Ikeji's sample file
 //create and listen to server connection
 $EOF=3;
 
-//
-$port = 8080;
+$port = 5000;
 $serverSocket = createServerConnection($port);
 socket_listen($serverSocket) or die ("unable to start Server, exiting!");
 echo "Server now running on $port\n";
@@ -19,10 +19,11 @@ echo "Server now running on $port\n";
 //keep list of clients and handshakes
 $listOfConnectedClients = [];
 $connectedClientsHandshakes = [];
+$players = [];
 
-// keep track of which clients are in which rooms
-$clientsInRooms = [];  // key = roomName, value = array of client sockets
-
+//clear players and screenname tables when server starts
+clearTable("players");
+clearTable("screenname");
 
 do {
     $clientsWithData = waitForIncomingMessageFromClients($listOfConnectedClients, $serverSocket);
@@ -58,105 +59,120 @@ do {
                     }
 
                     switch ($contents->type) {
+                        case 'LOGIN-screen-name':
+                            //login logic
+                            break;
+                        case 'NEW-GAME':
+                            //new game logic
+                            break;
+                        case 'JOIN':
+                            //join logic
+                            break;
+                        case 'MOVE':
+                            //move logic
+                            break;
+                        case 'END-GAME':
+                            //end game logic
+                            break;
+                        //old options from chatroom server
                         //new room added to the list
-                        case 'added-room' :
-                            $name = $contents->chatroomName;
-                            $keyPresent = $contents->keyPresent;
+                        // case 'added-room' :
+                        //     $name = $contents->chatroomName;
+                        //     $keyPresent = $contents->keyPresent;
 
-                            //send messages to all clients to add the new room to the top of the list
-                            updateChatroomLists($listOfConnectedClients, $name, $keyPresent);
-                            break;
+                        //     //send messages to all clients to add the new room to the top of the list
+                        //     updateChatroomLists($listOfConnectedClients, $name, $keyPresent);
+                        //     break;
 
-                        case "user-joined":
-                            $room = $contents->room ?? '';
-                            $screenName = $contents->screenName ?? '';
+                        // case "user-joined":
+                        //     $room = $contents->room ?? '';
+                        //     $screenName = $contents->screenName ?? '';
 
-                            if (!$room || !$screenName) break;
+                        //     if (!$room || !$screenName) break;
 
-                            // initialize room if it doesn't exist
-                            if (!isset($clientsInRooms[$room])) {
-                                $clientsInRooms[$room] = [];
-                            }
+                        //     // initialize room if it doesn't exist
+                        //     if (!isset($clientsInRooms[$room])) {
+                        //         $clientsInRooms[$room] = [];
+                        //     }
 
-                            // add client socket to the room if not already present
-                            if (!in_array($clientSocket, $clientsInRooms[$room], true)) {
-                            $clientsInRooms[$room][] = $clientSocket;
+                        //     // add client socket to the room if not already present
+                        //     if (!in_array($clientSocket, $clientsInRooms[$room], true)) {
+                        //     $clientsInRooms[$room][] = $clientSocket;
 
-                            // store handshake info keyed by socket ID
-                                $sockId = spl_object_id($clientSocket);
-                                $connectedClientsHandshakes[$sockId] = [
-                                    'screenName' => $screenName
-                                ];
-                            }
+                        //     // store handshake info keyed by socket ID
+                        //         $sockId = spl_object_id($clientSocket);
+                        //         $connectedClientsHandshakes[$sockId] = [
+                        //             'screenName' => $screenName
+                        //         ];
+                        //     }
 
-                            // broadcast join message to all in the room
-                            $joinMessage = [
-                                "type" => "user-joined",
-                                "room" => $room,
-                                "screenName" => $screenName,
-                                "messageText" => "$screenName has joined the room."
-                            ];
-                            $frame = mask(json_encode($joinMessage));
+                        //     // broadcast join message to all in the room
+                        //     $joinMessage = [
+                        //         "type" => "user-joined",
+                        //         "room" => $room,
+                        //         "screenName" => $screenName,
+                        //         "messageText" => "$screenName has joined the room."
+                        //     ];
+                        //     $frame = mask(json_encode($joinMessage));
 
-                            foreach ($clientsInRooms[$room] as $sock) {
-                                socket_write($sock, $frame, strlen($frame));
-                            }
-                            break;
+                        //     foreach ($clientsInRooms[$room] as $sock) {
+                        //         socket_write($sock, $frame, strlen($frame));
+                        //     }
+                        //     break;
 
-                        case "user-left":
-                            $room = $contents->roomName ?? '';
-                            $screenName = $contents->screenName ?? '';
+                        // case "user-left":
+                        //     $room = $contents->roomName ?? '';
+                        //     $screenName = $contents->screenName ?? '';
 
-                            if (!$room || !isset($clientsInRooms[$room])) break;
+                        //     if (!$room || !isset($clientsInRooms[$room])) break;
 
-                            // remove leaving user from room
-                            foreach ($clientsInRooms[$room] as $key => $sock) {
-                                $sockId = spl_object_id($sock);
-                                $handshake = $connectedClientsHandshakes[$sockId] ?? null;
-                                if ($handshake && $handshake['screenName'] === $screenName) {
-                                    unset($clientsInRooms[$room][$key]);
-                                    unset($connectedClientsHandshakes[$sockId]);
-                                }
-                            }
+                        //     // remove leaving user from room
+                        //     foreach ($clientsInRooms[$room] as $key => $sock) {
+                        //         $sockId = spl_object_id($sock);
+                        //         $handshake = $connectedClientsHandshakes[$sockId] ?? null;
+                        //         if ($handshake && $handshake['screenName'] === $screenName) {
+                        //             unset($clientsInRooms[$room][$key]);
+                        //             unset($connectedClientsHandshakes[$sockId]);
+                        //         }
+                        //     }
 
-                            // reindex room array
-                            $clientsInRooms[$room] = array_values($clientsInRooms[$room]);
+                        //     // reindex room array
+                        //     $clientsInRooms[$room] = array_values($clientsInRooms[$room]);
 
-                            // broadcast leave message to remaining clients
-                            $leaveMessage = [
-                                "type" => "user-left",
-                                "roomName" => $room,
-                                "screenName" => $screenName,
-                                "messageText" => "$screenName has left the room."
-                            ];
-                            $frame = mask(json_encode($leaveMessage));
+                        //     // broadcast leave message to remaining clients
+                        //     $leaveMessage = [
+                        //         "type" => "user-left",
+                        //         "roomName" => $room,
+                        //         "screenName" => $screenName,
+                        //         "messageText" => "$screenName has left the room."
+                        //     ];
+                        //     $frame = mask(json_encode($leaveMessage));
 
-                            foreach ($clientsInRooms[$room] as $sock) {
-                                socket_write($sock, $frame, strlen($frame));
-                            }
-                        break;
+                        //     foreach ($clientsInRooms[$room] as $sock) {
+                        //         socket_write($sock, $frame, strlen($frame));
+                        //     }
+                        // break;
 
-                        case "chatroom-message":
-                            // grab what was sent to server
-                            $room = $contents->roomName ?? '';
-                            $screenName = $contents->screenName ?? '';
-                            $messageText = $contents->message ?? '';
+                        // case "chatroom-message":
+                        //     // grab what was sent to server
+                        //     $room = $contents->roomName ?? '';
+                        //     $screenName = $contents->screenName ?? '';
+                        //     $messageText = $contents->message ?? '';
 
-                            if (!$room || !isset($clientsInRooms[$room])) break;
+                        //     if (!$room || !isset($clientsInRooms[$room])) break;
 
-                            $chatMessage = [
-                                "type" => "chatroom-message",
-                                "roomName" => $room,
-                                "screenName" => $screenName,
-                                "messageText" => $messageText
-                            ];
-                            $frame = mask(json_encode($chatMessage));
+                        //     $chatMessage = [
+                        //         "type" => "chatroom-message",
+                        //         "roomName" => $room,
+                        //         "screenName" => $screenName,
+                        //         "messageText" => $messageText
+                        //     ];
+                        //     $frame = mask(json_encode($chatMessage));
 
-                            foreach ($clientsInRooms[$room] as $sock) {
-                                socket_write($sock, $frame, strlen($frame));
-                            }
-                        break;
-
+                        //     foreach ($clientsInRooms[$room] as $sock) {
+                        //         socket_write($sock, $frame, strlen($frame));
+                        //     }
+                        // break;
                 default:
                     echo "Unknown message type: {$contents->type}\n";
                     break;
@@ -284,6 +300,7 @@ function updateChatroomLists($listOfClients, $chatroomName, $keyPresent) {
 
 function disconnectClient($clientSocket, &$listOfConnectedClients, &$connectedClientsHandshakes, &$clientsWithData)
 {
+    //todo remove client from players array as well as any tables they may be in
     if (($clientKey = array_search($clientSocket, $clientsWithData)) !== false) {	// find the index
         unset($clientsWithData[$clientKey]);				// zap it from the list
     }
@@ -293,5 +310,20 @@ function disconnectClient($clientSocket, &$listOfConnectedClients, &$connectedCl
         echo "disconnected client\n";
     }
     socket_close($clientSocket);	// close the connection to it
+}
+
+//todo add database connections
+function clearTable($tableName) {
+    global $conn;
+    $stmt = $conn->prepare("TRUNCATE TABLE ?");
+    $stmt->bind_param("s", $tableName);
+
+    if($stmt->execute()) {
+        echo "SUCCESS: truncated table" . $$tableName;
+    } else {
+        echo "ERROR truncating table.";
+    }
+
+    $stmt->close();
 }
 ?>
