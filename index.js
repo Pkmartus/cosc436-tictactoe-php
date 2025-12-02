@@ -24,7 +24,8 @@ var connectedSocket = null;
 function sendToServer(messageType, message) {
     try {
         if (!connectedSocket) createSocket();
-        connectedSocket.emit(messageType, message); // send msg to server
+        message.type = messageType; //removes the need to rewrite all calls to this method
+        connectedSocket.send(JSON.stringify(message)); // send msg to server
     } catch (err) {
         alert("System error 987: " + err + " contact us, or try again later");
     }
@@ -32,67 +33,100 @@ function sendToServer(messageType, message) {
 
 //creates the socket and sets message listeners
 function createSocket() {
-    try {
-        connectedSocket = io(`http://${window.location.hostname}:5000`);
-        console.log(connectedSocket + " in createSocket");
-    } catch (err) {
-        alert('connectedSocket create error, contact us');
-        connectedSocket = null;
+    if (socket) {
+        alert("Already connected");
         return;
     }
 
-    //when the login is succsessful hide the login window and show the rest of the content
-    connectedSocket.on("LOGIN", function (data) {
-        if (data.success) {
-            // alert("hi");
-            document.querySelector('.enter-name-container').style.display = 'none';
-            // document.querySelector('.whos-turn-for-current-game-for-user-container').style.display = 'block';
-            document.querySelector('.whos-turn-for-current-game-for-user-container').classList.add('whos-turn-visible');
+    socket = new WebSocket("ws://" + window.location.hostname + ":5000");
+    socket.onmessage = function (event) {
+        const message = JSON.parse(event.data);
 
-            document.querySelector('.main-content-container').style.display = 'flex';
-
-            if (data.screenName && data.status) {
-                updateLists(data.screenName, data.status);
-            }
-        } else {
-            alert(data.message);
+        switch (message.type) {
+            case "LOGIN":
+                //login logic
+                break;
+            case "UPDATED-USER-LIST-AND-STATUS":
+                //update user logic
+                break;
+            case "PLAY":
+                //play logic
+                break;
+            case "MOVE":
+                //move logic
+                break;
+            case "END-GAME":
+                //end game logic
+                break;
+            default:
+                console.log("Unknown message type:", message.type);
+                break;
         }
-    });
 
-    //update the lists
-    connectedSocket.on('UPDATED-USER-LIST-AND-STATUS', (data) => {
-        updateLists(data.screenNames, data.status);
-    })
+    }
 
-    //start a game
-    connectedSocket.on('PLAY', function (data) {
-        //reset current board state
-        startGame(data)
-        newGameButton.style.pointerEvents = 'none';
-        newGameButton.style.display = 'none';
+//js socket.io code
+    // try {
+    //     connectedSocket = io(`http://${window.location.hostname}:5000`);
+    //     console.log(connectedSocket + " in createSocket");
+    // } catch (err) {
+    //     alert('connectedSocket create error, contact us');
+    //     connectedSocket = null;
+    //     return;
+    // }
 
-    });
-    //handle a move from server
-    connectedSocket.on('MOVE', function (data) {
-        console.log("MOVE received", data);
-        updateTurnCard(data.screenname);
-        applyMoveToBoard(data.screenname, data.cell);
-    });
+    // //when the login is succsessful hide the login window and show the rest of the content
+    // connectedSocket.on("LOGIN", function (data) {
+    //     if (data.success) {
+    //         // alert("hi");
+    //         document.querySelector('.enter-name-container').style.display = 'none';
+    //         // document.querySelector('.whos-turn-for-current-game-for-user-container').style.display = 'block';
+    //         document.querySelector('.whos-turn-for-current-game-for-user-container').classList.add('whos-turn-visible');
 
-    //end the game
-    connectedSocket.on('END-GAME', (data) => {
-        console.log("END-GAME fired", data);
-        //disable listeners for board
-        disableListeners();
+    //         document.querySelector('.main-content-container').style.display = 'flex';
 
-        displayTheWinner(data.winner);
-        //reenable new game button
-        newGameButton.style.display = 'block';
-        newGameButton.style.pointerEvents = 'auto';
-        newGameButton.addEventListener('click', () => {
-            document.querySelector(".new-game-popup-container").style.display = "block";
-        });
-    });
+    //         if (data.screenName && data.status) {
+    //             updateLists(data.screenName, data.status);
+    //         }
+    //     } else {
+    //         alert(data.message);
+    //     }
+    // });
+
+    // //update the lists
+    // connectedSocket.on('UPDATED-USER-LIST-AND-STATUS', (data) => {
+    //     updateLists(data.screenNames, data.status);
+    // })
+
+    // //start a game
+    // connectedSocket.on('PLAY', function (data) {
+    //     //reset current board state
+    //     startGame(data)
+    //     newGameButton.style.pointerEvents = 'none';
+    //     newGameButton.style.display = 'none';
+
+    // });
+    // //handle a move from server
+    // connectedSocket.on('MOVE', function (data) {
+    //     console.log("MOVE received", data);
+    //     updateTurnCard(data.screenname);
+    //     applyMoveToBoard(data.screenname, data.cell);
+    // });
+
+    // //end the game
+    // connectedSocket.on('END-GAME', (data) => {
+    //     console.log("END-GAME fired", data);
+    //     //disable listeners for board
+    //     disableListeners();
+
+    //     displayTheWinner(data.winner);
+    //     //reenable new game button
+    //     newGameButton.style.display = 'block';
+    //     newGameButton.style.pointerEvents = 'auto';
+    //     newGameButton.addEventListener('click', () => {
+    //         document.querySelector(".new-game-popup-container").style.display = "block";
+    //     });
+    // });
 }
 //handles the determined winner and displays it on the current turn card
 function displayTheWinner(winner){
