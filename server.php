@@ -9,11 +9,11 @@
 include('dbConnection.php');
 //some of this file is adapted from PROF Ikeji's sample file
 //create and listen to server connection
-$EOF=3;
+$EOF = 3;
 
 $port = 5000;
 $serverSocket = createServerConnection($port);
-socket_listen($serverSocket) or die ("unable to start Server, exiting!");
+socket_listen($serverSocket) or die("unable to start Server, exiting!");
 echo "Server now running on $port\n";
 
 //keep list of clients and handshakes
@@ -30,27 +30,23 @@ do {
 
     //check for connection request (happens when the server socket is one of the clients with data)
     if (in_array($serverSocket, $clientsWithData)) {
-        	$newSocket = socket_accept($serverSocket);
-		// handshake is a mechanisom by which the server and the connecting clients introduce each other,
-		// authenticate and establish how they want to communicate/the rules.
-		if (performHandshake($newSocket)) {
-			$listOfConnectedClients[] = $newSocket;
-			echo "connected. #clients: ".count($listOfConnectedClients)."\n";
-		}
-		else {
-			disconnectClient($newSocket, $listOfConnectedClients, $connectedClientsHandshakes, $clientsWithData);
-		}
-	}
-    else { //message is either data or disconnect
+        $newSocket = socket_accept($serverSocket);
+        // handshake is a mechanisom by which the server and the connecting clients introduce each other,
+        // authenticate and establish how they want to communicate/the rules.
+        if (performHandshake($newSocket)) {
+            $listOfConnectedClients[] = $newSocket;
+            echo "connected. #clients: " . count($listOfConnectedClients) . "\n";
+        } else {
+            disconnectClient($newSocket, $listOfConnectedClients, $connectedClientsHandshakes, $clientsWithData);
+        }
+    } else { //message is either data or disconnect
         foreach ($clientsWithData as $clientSocket) {
             $len = @socket_recv($clientSocket, $buffer, 1024, 0); //read to either the end of file or 1024 bytes
-            if ($len === false || $len == 0 || strlen($message=unmask($buffer)) > 0 && ord($message[0]) == $EOF ) //disconnect or error remove from connection list
+            if ($len === false || $len == 0 || strlen($message = unmask($buffer)) > 0 && ord($message[0]) == $EOF) //disconnect or error remove from connection list
             {
                 disconnectClient($clientSocket, $listOfConnectedClients, $connectedClientsHandshakes, $clientsWithData);
-            }
-            else { //message is either a chatroom-message or an added-message
-                if (!empty($message))
-                {
+            } else { //message is either a chatroom-message or an added-message
+                if (!empty($message)) {
                     $contents = json_decode($message);
 
                     if ($contents === null) {
@@ -61,6 +57,55 @@ do {
                     switch ($contents->type) {
                         case 'LOGIN-screen-name':
                             //login logic
+                            $screenName = $contents->screenName;
+                            if (!$screenName || trim($screenName) == "") {
+                                $loginMessage = [
+                                    "type" => "LOGIN",
+                                    "success" => false,
+                                    "message" => "Invalid screen name"
+                                ];
+                                sendToClient($loginMessage, $clientSocket);
+                                break;
+                            }
+
+                            //check for screenname in db
+                            $dbResult = findScreenName($screenName);
+
+                            if ($dbResult->num_rows > 0) {
+                                $loginMessage = [
+                                    "type" => "LOGIN",
+                                    "success" => false,
+                                    "message" => "Screen name already taken please chose another."
+                                ];
+                                sendToClient($loginMessage, $clientSocket);
+                                break;
+                            }
+
+                            // store handshake info keyed by socket ID
+                            $sockId = spl_object_id($clientSocket);
+                            $connectedClientsHandshakes[$sockId] = [
+                                'screenName' => $screenName
+                            ];
+
+                            //insert into db
+                            if(!insertScreenName($screenName)) {
+                                $loginMessage = [
+                                    "type" => "LOGIN", 
+                                    "sucsess" => false,
+                                    "message" => "Database error. Please try again"
+                                ];
+                                sendToClient($loginMessage, $clientSocket);
+                                break;
+                            }
+
+                            echo('User' . $screenName . 'added to DB.');
+                            $loginMessage =[
+                                "type" => "LOGIN",
+                                "success" => true,
+                                "screenname" => $screenName
+                            ];
+                            sendToClient($loginMessage, $clientSocket);
+                            //todo update lists
                             break;
                         case 'NEW-GAME':
                             //new game logic
@@ -173,11 +218,10 @@ do {
                         //         socket_write($sock, $frame, strlen($frame));
                         //     }
                         // break;
-                default:
-                    echo "Unknown message type: {$contents->type}\n";
-                    break;
-                }
-
+                        default:
+                            echo "Unknown message type: {$contents->type}\n";
+                            break;
+                    }
                 }
             }
         }
@@ -185,57 +229,61 @@ do {
 } while (true);
 
 // Create server socket for others to connect to and communicate with
-function createServerConnection($port, $host=0) {
-	// Create TCP/IP streaming socket
-	$serverSocket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-	// Set option for the port to be reusable
-	socket_set_option($serverSocket, SOL_SOCKET, SO_REUSEADDR, 1);
-	// Bind the socket to $port and to the $host given. Default host is 0 i.e. localhost
-	socket_bind($serverSocket, $host, $port);
-	return $serverSocket;
+function createServerConnection($port, $host = 0)
+{
+    // Create TCP/IP streaming socket
+    $serverSocket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+    // Set option for the port to be reusable
+    socket_set_option($serverSocket, SOL_SOCKET, SO_REUSEADDR, 1);
+    // Bind the socket to $port and to the $host given. Default host is 0 i.e. localhost
+    socket_bind($serverSocket, $host, $port);
+    return $serverSocket;
 }
 
-function waitForIncomingMessageFromClients ($clients, $serverSocket) {
-	$readList = $clients;		// start with list of clients for read list
-	$readList[] = $serverSocket;	// append server socket so we can also detect connect requests
-	$writeList = $exceptionList = [];	// We use empty for these
+function waitForIncomingMessageFromClients($clients, $serverSocket)
+{
+    $readList = $clients;        // start with list of clients for read list
+    $readList[] = $serverSocket;    // append server socket so we can also detect connect requests
+    $writeList = $exceptionList = [];    // We use empty for these
 
-	// Loop until a read, connect or disconnect request
-	socket_select($readList, $writeList, $exceptionList, NULL);
-	return $readList;
+    // Loop until a read, connect or disconnect request
+    socket_select($readList, $writeList, $exceptionList, NULL);
+    return $readList;
 }
 
 // handshake is a mechanisom by which the server and the connecting clients introduce each other,
 // authenticate and establish how they want to communicate/the rules.
-function performHandshake($clientSocket) {
-	$len = @socket_recv($clientSocket, $headers, 1024, 0); // read to eoln or 1024 bytes
-	if ($len === false || $len == 0) return false; // disconnected
-	$headers = explode("\r\n", $headers);
-    	$headerArray = [];
-    	foreach ($headers as $header) {
-        	$parts = explode(": ", $header);
-        	if (count($parts) === 2) $headerArray[$parts[0]] = $parts[1];
-	}
+function performHandshake($clientSocket)
+{
+    $len = @socket_recv($clientSocket, $headers, 1024, 0); // read to eoln or 1024 bytes
+    if ($len === false || $len == 0) return false; // disconnected
+    $headers = explode("\r\n", $headers);
+    $headerArray = [];
+    foreach ($headers as $header) {
+        $parts = explode(": ", $header);
+        if (count($parts) === 2) $headerArray[$parts[0]] = $parts[1];
+    }
 
-	// this is not a strict handshake because we don't enforce that the Sec-WebSocket-Keys match, we only want to see the Key
-	if (!isset($headerArray['Sec-WebSocket-Key'])) return false;
-	$secKey = $headerArray['Sec-WebSocket-Key'];
-	$uuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // Fixed constant for hand shakes
-    	$secAccept = base64_encode(pack('H*', sha1($secKey . $uuid)));
-    	$handshakeResponse = "HTTP/1.1 101 Switching Protocols\r\n" .
-        	"Upgrade: websocket\r\n" .
-        	"Connection: Upgrade\r\n" .
-        	"Sec-WebSocket-Accept: $secAccept\t\r\n\r\n";
-	socket_write($clientSocket, $handshakeResponse, strlen($handshakeResponse));
-	return true;
+    // this is not a strict handshake because we don't enforce that the Sec-WebSocket-Keys match, we only want to see the Key
+    if (!isset($headerArray['Sec-WebSocket-Key'])) return false;
+    $secKey = $headerArray['Sec-WebSocket-Key'];
+    $uuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"; // Fixed constant for hand shakes
+    $secAccept = base64_encode(pack('H*', sha1($secKey . $uuid)));
+    $handshakeResponse = "HTTP/1.1 101 Switching Protocols\r\n" .
+        "Upgrade: websocket\r\n" .
+        "Connection: Upgrade\r\n" .
+        "Sec-WebSocket-Accept: $secAccept\t\r\n\r\n";
+    socket_write($clientSocket, $handshakeResponse, strlen($handshakeResponse));
+    return true;
 }
 
 // Masking and unmasking of the messages is highly recommend because websockets are implemented
 // via the http connection. If the message is not masked it may be misinterpreted by the http server
 // as a regular http message rather than a websocket message.
 // mask and unmask functions from: https://piehost.com/websocket/build-a-websocket-server-in-php-without-any-library
-function unmask($payload) {
-    if (strlen($payload)==0) return "";
+function unmask($payload)
+{
+    if (strlen($payload) == 0) return "";
     $length = ord($payload[1]) & 127;
     if ($length == 126) {
         $masks = substr($payload, 4, 4);
@@ -254,7 +302,8 @@ function unmask($payload) {
     return $unmaskedtext;
 }
 
-function mask($message) {
+function mask($message)
+{
     $frame = [];
     $frame[0] = 129;
 
@@ -284,7 +333,8 @@ function mask($message) {
     return implode(array_map('chr', $frame));
 }
 
-function updateChatroomLists($listOfClients, $chatroomName, $keyPresent) {
+function updateChatroomLists($listOfClients, $chatroomName, $keyPresent)
+{
     $data = [
         "type" => "update_room_lists",
         "name" => $chatroomName,
@@ -301,29 +351,59 @@ function updateChatroomLists($listOfClients, $chatroomName, $keyPresent) {
 function disconnectClient($clientSocket, &$listOfConnectedClients, &$connectedClientsHandshakes, &$clientsWithData)
 {
     //todo remove client from players array as well as any tables they may be in
-    if (($clientKey = array_search($clientSocket, $clientsWithData)) !== false) {	// find the index
-        unset($clientsWithData[$clientKey]);				// zap it from the list
+    if (($clientKey = array_search($clientSocket, $clientsWithData)) !== false) {    // find the index
+        unset($clientsWithData[$clientKey]);                // zap it from the list
     }
     if (($clientKey = array_search($clientSocket, $listOfConnectedClients)) !== false) { // find the index
-        unset($listOfConnectedClients[$clientKey]);			// zap it from the list
-        unset($connectedClientsHandshakes[$clientKey]);			// zap it from the list
+        unset($listOfConnectedClients[$clientKey]);            // zap it from the list
+        unset($connectedClientsHandshakes[$clientKey]);            // zap it from the list
         echo "disconnected client\n";
     }
-    socket_close($clientSocket);	// close the connection to it
+    socket_close($clientSocket);    // close the connection to it
+}
+
+function sendToClient($message, $sock)
+{
+    $frame = mask(json_encode($loginMessage));
+    socket_write($sock, $frame, strlen($frame));
 }
 
 //todo add database connections
-function clearTable($tableName) {
+function clearTable($tableName)
+{
     global $conn;
     $stmt = $conn->prepare("TRUNCATE TABLE ?");
     $stmt->bind_param("s", $tableName);
 
-    if($stmt->execute()) {
+    if ($stmt->execute()) {
         echo "SUCCESS: truncated table" . $$tableName;
     } else {
         echo "ERROR truncating table.";
     }
 
     $stmt->close();
+}
+
+
+//todo echo errors
+function findScreenName($screenName)
+{
+    global $conn;
+    $stmt = $conn->prepare("SELECT * FROM screenname WHERE screenname = ?");
+    $stmt->bind_param("s", $screenName);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result;
+}
+
+function insertScreenName($screenName)
+{
+    global $conn;
+    $stmt = $conn->prepare("INSERT INTO screenname (screenname) VALUES (?)");
+    $stmt->bind_param("s", $screenName);
+    $stmt->execute();
+    
+
+    return $stmt -> errno === 0;
 }
 ?>
