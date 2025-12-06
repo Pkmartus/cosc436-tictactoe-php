@@ -222,6 +222,7 @@ do {
                             echo "Unknown message type: {$contents->type}\n";
                             break;
                     }
+                    updateLists();
                 }
             }
         }
@@ -333,21 +334,6 @@ function mask($message)
     return implode(array_map('chr', $frame));
 }
 
-function updateChatroomLists($listOfClients, $chatroomName, $keyPresent)
-{
-    $data = [
-        "type" => "update_room_lists",
-        "name" => $chatroomName,
-        "keyPresent" => $keyPresent
-    ];
-    $jsonData = json_encode($data);
-    $frame = mask($jsonData);
-    $frameLen = strlen($frame);
-    foreach ($listOfClients as $client) {
-        socket_write($client, $frame, $frameLen);
-    }
-}
-
 function disconnectClient($clientSocket, &$listOfConnectedClients, &$connectedClientsHandshakes, &$clientsWithData)
 {
     //todo remove client from players array as well as any tables they may be in
@@ -364,7 +350,7 @@ function disconnectClient($clientSocket, &$listOfConnectedClients, &$connectedCl
 
 function sendToClient($message, $sock)
 {
-    $frame = mask(json_encode($loginMessage));
+    $frame = mask(json_encode($message));
     socket_write($sock, $frame, strlen($frame));
 }
 
@@ -392,6 +378,11 @@ function findScreenName($screenName)
     $stmt = $conn->prepare("SELECT * FROM screenname WHERE screenname = ?");
     $stmt->bind_param("s", $screenName);
     $stmt->execute();
+
+    if ($stmt->errno !== 0) {
+        return $stmt->error;  // return error message as a string
+    }
+
     $result = $stmt->get_result();
     return $result;
 }
@@ -403,7 +394,101 @@ function insertScreenName($screenName)
     $stmt->bind_param("s", $screenName);
     $stmt->execute();
     
+    if ($stmt->errno !== 0) {
+        return $stmt->error;  // return error message as a string
+    }
 
-    return $stmt -> errno === 0;
+    return true;
+}
+
+function getAllScreenNames() {
+    global $conn;
+    $stmt = $conn -> prepare("SELECT * FROM screenname");
+    $stmt -> execute();
+
+    if ($stmt->errno !== 0) {
+        return $stmt->error;  // return error message as a string
+    }
+
+    $result = $stmt->get_result();
+    return $result;
+}
+
+function getStatus($screenName) {
+    global $conn;
+    $stmt = $conn -> prepare("SELECT game_id, x_player, o_player FROM players WHERE ? = x_player OR ? = o_player");
+    $stmt -> bind_param("ss", $screenName, $screenName);
+    $stmt -> execute();
+
+    if($stmt -> errno !== 0)
+    {
+        return $stmt -> error;
+    }
+    $result = $stmt -> get_result();
+    return $result;
+}
+
+function updateLists() {
+    $screenNames = [];
+    $playerStatus = [];
+
+    $screenNameResult = getAllScreenNames();
+    if(is_string($screenNameResult)) {
+        echo('Error retrieving idle users' . $screenNameResult);
+        return;
+    }
+
+    while($row = $screenNameResult -> fetch_assoc()) 
+    {
+        $screenName = $row['screenname'];
+        $screenNames[] = $screenName;
+
+        $statusResult = getStatus($screenName);
+        if(is_string($statusResult) || $statusResult->num_rows === 0)
+        {
+            $playerStatus[] = ["game" => "idle"];
+            continue;
+        }
+
+        $game = $statusResult -> fetch_assoc();
+        $bothPlayersPresent = !empty($game['x_player']) && !empty($game['o_player']);
+
+        if(!$bothPlayersPresent) 
+            {
+            //the user is waiting for an opponent, show in both idle list and matches table
+            if($game['x_player'] == $screenName) 
+            {
+                $playerStatus[] = ["game" => $game['game_id'], "position" => 'x', "idle" => true];
+            } 
+            elseif($game['o_player'] == $screenName) 
+            {
+                $playerStatus[] = ["game" => $game['game_id'], "position" => 'o', "idle" => true];
+            }
+        }
+        elseif($game['x_player'] == $screenName) 
+        {
+            $playerStatus[] = ["game" => $game['game_id'], "position" => 'x', "idle" => false];
+        }
+        elseif($game['o_player'] == $screenName) 
+        {
+            $playerStatus[] = ["game" => $game['game_id'], "position" => 'o', "idle" => false];
+        }
+        else
+        {
+            $playerStatus[] = ["game" => "idle"];
+        }   
+    }
+
+    $updateMessage = [
+        "type" => "UPDATED-USER-LIST-AND-STATUS",
+        "screennames" => $screenNames,
+        "status" => $playerStatus
+    ];
+    
+    //send to all the users
+    global $listOfClients;
+    foreach ($listOfClients as $client) {
+        sendToClient($updateMessage, $client);
+    }
 }
 ?>
