@@ -35,7 +35,7 @@ do {
         // authenticate and establish how they want to communicate/the rules.
         if (performHandshake($newSocket)) {
             $listOfConnectedClients[] = $newSocket;
-            echo "connected. #clients: " . count($listOfConnectedClients) . "\n";
+            echo "connected clients: " . count($listOfConnectedClients) . "\n";
         } else {
             disconnectClient($newSocket, $listOfConnectedClients, $connectedClientsHandshakes, $clientsWithData);
         }
@@ -57,7 +57,7 @@ do {
                     switch ($contents->type) {
                         case 'LOGIN-screen-name':
                             //login logic
-                            $screenName = $contents->screenName;
+                            $screenName = $contents->screenname;
                             if (!$screenName || trim($screenName) == "") {
                                 $loginMessage = [
                                     "type" => "LOGIN",
@@ -98,7 +98,7 @@ do {
                                 break;
                             }
 
-                            echo('User' . $screenName . 'added to DB.');
+                            echo('User: ' . $screenName . 'added to DB.');
                             $loginMessage =[
                                 "type" => "LOGIN",
                                 "success" => true,
@@ -358,16 +358,13 @@ function sendToClient($message, $sock)
 function clearTable($tableName)
 {
     global $conn;
-    $stmt = $conn->prepare("TRUNCATE TABLE ?");
-    $stmt->bind_param("s", $tableName);
+    $sql = "TRUNCATE TABLE $tableName";
 
-    if ($stmt->execute()) {
-        echo "SUCCESS: truncated table" . $$tableName;
+    if ($conn->query($sql)) {
+        echo ("SUCCESS: truncated table " . $tableName ."\n");
     } else {
-        echo "ERROR truncating table.";
+        echo ("ERROR truncating table.\n");
     }
-
-    $stmt->close();
 }
 
 
@@ -486,8 +483,8 @@ function updateLists() {
     ];
     
     //send to all the users
-    global $listOfClients;
-    foreach ($listOfClients as $client) {
+    global $listOfConnectedClients;
+    foreach ($listOfConnectedClients as $client) {
         sendToClient($updateMessage, $client);
     }
 }

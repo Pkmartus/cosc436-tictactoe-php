@@ -33,19 +33,26 @@ function sendToServer(messageType, message) {
 
 //creates the socket and sets message listeners
 function createSocket() {
-    if (socket) {
+    if (connectedSocket) {
         alert("Already connected");
         return;
     }
 
-    socket = new WebSocket("ws://" + window.location.hostname + ":5000");
-    socket.onmessage = function (event) {
+    connectedSocket = new WebSocket("ws://" + window.location.hostname + ":5000");
+    connectedSocket.onmessage = function (event) {
         const message = JSON.parse(event.data);
 
         switch (message.type) {
             case "LOGIN":
-                //login logic
-                break;
+                if (message.success) {
+                        // alert("hi");
+                        document.querySelector('.enter-name-container').style.display = 'none';
+                        // document.querySelector('.whos-turn-for-current-game-for-user-container').style.display = 'block';
+                        document.querySelector('.whos-turn-for-current-game-for-user-container').classList.add('whos-turn-visible');
+
+                        document.querySelector('.main-content-container').style.display = 'flex';
+                    }
+                    break;
             case "UPDATED-USER-LIST-AND-STATUS":
                 //update user logic
                 break;
@@ -65,7 +72,7 @@ function createSocket() {
 
     }
 
-//js socket.io code
+    //js socket.io code
     // try {
     //     connectedSocket = io(`http://${window.location.hostname}:5000`);
     //     console.log(connectedSocket + " in createSocket");
@@ -129,7 +136,7 @@ function createSocket() {
     // });
 }
 //handles the determined winner and displays it on the current turn card
-function displayTheWinner(winner){
+function displayTheWinner(winner) {
     const winnerText = document.querySelector(".current-turn");
     winnerText.textContent = "Result:"
     // display draw, winner name if x, winner name if o
@@ -270,12 +277,12 @@ const whoO = document.querySelector(".whos-o");
 
 function startGame(play) {
     //reset board if game new
-    isGameOver = false; 
+    isGameOver = false;
     currentBoardState = [
-            ['', '', ''],
-            ['', '', ''],
-            ['', '', '']
-        ];
+        ['', '', ''],
+        ['', '', ''],
+        ['', '', '']
+    ];
     currentTurnText.textContent = "Current Turn";
     displayBoard(currentBoardState); //update the board to empty
     //set the values in the who's turn card
@@ -324,7 +331,7 @@ submitButton.addEventListener('click', () => {
     }
 
     userScreenName = screenname;
-    sendToServer("LOGIN-screen-name", screenname);
+    sendToServer("LOGIN-screen-name", { screenname: screenname });
 });
 
 newGameButton.addEventListener('click', () => {
